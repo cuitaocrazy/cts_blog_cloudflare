@@ -1,0 +1,344 @@
+---
+meta:
+  - title: 用MDX和Remix创建自己的Blog
+  - name: description
+    content: 用Remix创建自己的Blog，使用MDX作为博客内容，使用shadcn/ui作为UI库，使用tailwindcss作为样式库。
+  - name: twitter:card
+    content: summary_large_image
+  - name: twitter:title
+    content: 用MDX和Remix创建自己的Blog
+  - name: twitter:description
+    content: 用Remix创建自己的Blog，使用MDX作为博客内容，使用shadcn/ui作为UI库，使用tailwindcss作为样式库。
+  - property: og:title
+    content: 用MDX和Remix创建自己的Blog
+  - property: og:description
+    content: 用Remix创建自己的Blog，使用MDX作为博客内容，使用shadcn/ui作为UI库，使用tailwindcss作为样式库。
+  - name: twitter:image
+    content: /images/step-by-step-mdx-remix-blog.webp
+  - property: og:image
+    content: /images/step-by-step-mdx-remix-blog.webp
+date: 2023-11-13
+image: /images/step-by-step-mdx-remix-blog.webp
+tags:
+  - Remix
+  - MDX
+  - Web Development
+  - CSS Framework
+  - UI Design
+  - Coding Tutorial
+  - Tailwind CSS
+  
+---
+
+## 介绍
+
+在这个教程中，我们将学习如何使用 [Remix](https://remix.run/) 和 [MDX](https://mdxjs.com/) 来创建一个静态博客。
+
+## 什么是Remix
+
+Remix 是一个现代Web框架，旨在帮助开发者快速构建高效的应用程序。
+
+## 什么是MDX
+
+MDX 是一种结合了 Markdown 和 React 组件的格式。它使得在 Markdown 中使用交互式组件变得简单。
+
+## 构建remix博客
+
+### 安装remix
+
+首先，我们需要安装 Remix CLI。运行以下命令：
+
+```bash
+npx create-remix@latest my-blog
+```
+
+### 安装shadcn/ui
+
+为了美化我们的博客，我们选择使用 shadcn/ui 作为 UI 库。安装命令如下：
+
+```bash
+npx shadcn-ui@latest init
+```
+
+配置选项示例：
+
+```text
+Would you like to use TypeScript (recommended)? no / yes
+Which style would you like to use? › Default
+Which color would you like to use as base color? › Slate
+Where is your global CSS file? › app/tailwind.css
+Do you want to use CSS variables for colors? › no / yes
+Where is your tailwind.config.js located? › tailwind.config.js
+Configure the import alias for components: › ~/components
+Configure the import alias for utils: › ~/lib/utils
+Are you using React Server Components? › no
+```
+
+### 安装tailwindcss
+
+shadcn/ui 使用 tailwindcss，所以我们需要安装 tailwindcss 和 autoprefixer。
+
+```bash
+npm add -D tailwindcss@latest autoprefixer@latest
+```
+
+创建`postcss.config.js`文件
+
+```js
+export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+};
+```
+
+修改`remix.config.js`文件
+
+```js
+/** @type {import('@remix-run/dev').AppConfig} */
+export default {
+  ...
+  tailwind: true,
+  postcss: true,
+  ...
+};
+```
+
+添加`app/tailwind.css`到你的`app/root.tsx`文件
+
+```diff
++ import styles from "./tailwind.css"
+
+export const links: LinksFunction = () => [
++  { rel: "stylesheet", href: styles },
+  ...(cssBundleHref ? [{ rel: "stylesheet", href: cssBundleHref }] : []),
+]
+
+```
+
+因为shadcn/ui在init的时候已经帮我们配置好了tailwindcss，所以我们不需要再次配置tailwindcss。
+
+### 安装mdx相关依赖
+
+- rehype-highlight: 代码高亮
+- rehype-katex: 数学公式
+- remark-math: 数学公式
+- remark-toc: 目录
+
+```bash
+npm install remark-math remark-toc rehype-highlight rehype-katex
+```
+
+配置mdx
+
+```diff
+// remix.config.js
+/** @type {import('@remix-run/dev').AppConfig} */
+export default {
+  ...
++  mdx: async (filename) => {
++    const [rehypeHighlight, remarkToc, remarkMath, rehypeKatex] =
++      await Promise.all([
++        import("rehype-highlight").then((mod) => mod.default),
++        import("remark-toc").then((mod) => mod.default),
++        import("remark-math").then((mod) => mod.default),
++        import("rehype-katex").then((mod) => mod.default),
++      ]);
++
++    return {
++      remarkPlugins: [remarkToc, remarkMath],
++      rehypePlugins: [rehypeHighlight, rehypeKatex],
++    };
++  },
+};
+```
+
+### 添加其他依赖
+
+因为remix仅仅只是支持MDX, 但是没有MarkDown的样式, 因此我们添加GitHub的风格样式:
+
+```bash
+npm install github-markdown-css
+```
+
+添加一个button组件到项目, 我们只用到它的link样式
+
+```bash
+npx shadcn-ui@latest add button
+```
+
+## post模版
+
+创建一个 Post 模版，以加载公共组件。示例见 app/routes/posts.tsx。
+
+```tsx
+import { Outlet } from "@remix-run/react";
+import highlightStyles from "highlight.js/styles/github.min.css";
+import katexStyles from "katex/dist/katex.css";
+import markdownStyles from "github-markdown-css/github-markdown-light.css";
+
+export const links = () => {
+  return [
+    {
+      rel: "stylesheet",
+      href: highlightStyles,
+    },
+    {
+      rel: "stylesheet",
+      href: katexStyles,
+    },
+    {
+      rel: "stylesheet",
+      href: markdownStyles,
+    },
+  ];
+};
+
+export default function Posts() {
+  return (
+    <div className="markdown-body">
+      <Outlet />
+    </div>
+  );
+}
+
+```
+
+现在可以写一个简单的post测试一下:
+
+创建`app/posts/hello-world.mdx`文件:
+
+```mdx
+---
+meta:
+  - title: Hello World
+---
+
+# Hello World
+```
+
+启动开发环境:
+
+```bash
+npm run dev
+```
+
+访问地址`http://localhost:3000/posts/hello-world`
+
+## blog列表处理工具
+
+Remix把MDX文件当做一个路由, 但是并不能获取MDX文件的列表, 编译以后更不知道MDX文件的存在, 因此我们需要一个工具来处理MDX文件, 生成一个路由列表.
+
+创建一个`tools/MDXPreprocessor.mjs`文件:
+
+```js
+import fs from "fs";
+import { parse, stringify } from "yaml";
+
+const routesDirectory = "./app/routes";
+const mdxHeaderPattern = /---\n(.*)\n---/s;
+const postNamePattern = /posts\.(.*)\.mdx/;
+
+const mdxFiles = fs
+  .readdirSync(routesDirectory)
+  .filter((file) => file.match(/posts.*.mdx/));
+
+function formatDate(date) {
+  let d = new Date(date),
+    month = "" + (d.getMonth() + 1),
+    day = "" + d.getDate(),
+    year = d.getFullYear();
+
+  if (month.length < 2) month = "0" + month;
+  if (day.length < 2) day = "0" + day;
+
+  return [year, month, day].join("-");
+}
+
+const posts = mdxFiles.map((file) => {
+  const mdxFile = fs.readFileSync(`${routesDirectory}/${file}`, "utf8");
+  const mdxHeader = mdxFile.match(mdxHeaderPattern)[1];
+  const mdxHeaderObject = parse(mdxHeader);
+  const postName = file.match(postNamePattern)[1];
+  let needRewrite = false;
+
+  if (!mdxHeaderObject.date) {
+    mdxHeaderObject.date = formatDate(Date.now());
+    needRewrite = true;
+  }
+
+  if (!mdxHeaderObject.title) {
+    const title = mdxHeaderObject.meta.reduce((acc, cur) => {
+      if (!acc && cur.title) {
+        return cur.title;
+      } else {
+        return acc;
+      }
+    }, undefined);
+    mdxHeaderObject.title = title || mdxHeaderObject.title.replace(/"/g, '\\"');
+    needRewrite = true;
+  }
+
+  if (needRewrite) {
+    const newMdxHeader = stringify(mdxHeaderObject);
+    const newMdxFile = mdxFile.replace(mdxHeader, newMdxHeader);
+    fs.writeFileSync(`${routesDirectory}/${file}`, newMdxFile);
+  }
+
+  return {
+    ...mdxHeaderObject,
+    slug: postName,
+  };
+});
+
+posts.sort((a, b) => {
+  if (a.date === b.date) {
+    return a.title > b.title ? 1 : -1;
+  }
+
+  return a.date > b.date ? -1 : 1;
+});
+
+fs.writeFileSync("./tools/posts.json", JSON.stringify(posts, null, 2));
+
+```
+
+这个脚本会读取`app/routes`目录下的所有`posts.*.mdx`文件, 并且解析出文件的meta信息, 生成一个`tools/posts.json`文件, 用来生成路由列表.
+
+修改`app/routes/_index.tsx`文件:
+
+```tsx
+import type { MetaFunction } from "@remix-run/node";
+import posts from "../../tools/posts.json";
+import { Link } from "@remix-run/react";
+import { buttonVariants } from "~/components/ui/button";
+import { cn } from "~/lib/utils";
+
+export const meta: MetaFunction = () => {
+  return [{ title: "Cuitao's Blogs" }];
+};
+
+export default function Index() {
+  return (
+    <div>
+      <ul>
+        {posts.map((post: any) => (
+          <li key={post.slug}>
+            <Link
+              className={cn(buttonVariants({ variant: "link" }), "space-x-2")}
+              to={`/posts/${post.slug}`}
+            >
+              <span>{post.title}</span>
+              <span className="text-muted-foreground text-xs">{post.date}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+```
+
+这样我们每次添加一个新的post时, 只要运行一下`node tools/MDXPreprocessor.mjs`就可以生成一个新的路由列表了.

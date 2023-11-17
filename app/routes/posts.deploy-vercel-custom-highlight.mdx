@@ -1,0 +1,173 @@
+---
+meta:
+  - title: 部署到vercel和自己定义代码高亮
+  - name: description
+    content: 接《用MDX和Remix创建自己的Blog》，本文将介绍如何将博客部署到vercel和自己定义代码高亮。
+  - name: twitter:card
+    content: summary_large_image
+  - name: twitter:title
+    content: 部署到vercel和自己定义代码高亮
+  - name: twitter:description
+    content: 接《用MDX和Remix创建自己的Blog》，本文将介绍如何将博客部署到vercel和自己定义代码高亮。
+  - property: og:title
+    content: 部署到vercel和自己定义代码高亮
+  - property: og:description
+    content: 接《用MDX和Remix创建自己的Blog》，本文将介绍如何将博客部署到vercel和自己定义代码高亮。
+  - name: twitter:image
+    content: /images/deploy-vercel-custom-highlight.webp
+  - property: og:image
+    content: /images/deploy-vercel-custom-highlight.webp
+date: 2023-11-14
+image: /images/deploy-vercel-custom-highlight.webp
+tags:
+  - Vercel Deployment
+  - Code Highlighting
+  - MDX
+  - Remix
+
+---
+
+本文是接[《用MDX和Remix创建自己的Blog》](https://blogs.ctctklfh.com/posts/step-by-step-mdx-remix-blog)的，如果你还没有看过，可以先看一下。
+
+## 前提
+
+为了开始，您首先需要一个域名。本例中使用了通过 Cloudflare 托管的域名。如果您还没有域名，可以选择使用 Vercel 提供的免费二级域名。
+
+接下来，您将需要一个 Vercel 账户。如果您还未注册，可以轻松地在 [Vercel 官网](https://vercel.com/) 创建一个账户。
+
+最后，您还需要拥有 GitHub、GitLab 或 Bitbucket 中的任何一个账户。这是为了实现代码的托管和自动部署。
+
+## 部署到Vercel
+
+登录Vercel，点击Add New...，选Project然后跟着向导完成即可。
+
+关于Vercel和Cloudflare的使用可以参考《[Vercel and Cloudflare Integration](https://vercel.com/docs/integrations/cloudflare)》，我用的是“Using Cloudflare as Your DNS Provider”。
+
+## 自定义代码高亮
+
+因为rehype-highlight没有显示脚本类型和复制按钮功能，所以我们需要自定义代码高亮。
+
+我的思路是对rehype-highlight进行扩展，让它可以加载自己写的Pre组件进行展示。
+
+扩展rehype-highlight插件：
+
+```js
+import rh from "rehype-highlight";
+
+function enhancedRehypHighlight(options) {
+  const _rh = rh(options);
+
+  return (tree, file) => {
+    visit(tree, (node) => {
+      if (node?.type === "element" && node?.tagName === "pre") {
+        const [codeElement] = node.children;
+
+        if (codeElement.tagName !== "code") {
+          return;
+        }
+
+        node.properties.code = codeElement.children[0].value;
+
+        if (!codeElement.properties.className) {
+          return;
+        }
+
+        node.properties.language = codeElement.properties.className[0].slice(
+          "language-".length
+        );
+      }
+    });
+    _rh(tree, file);
+    visit(tree, (node) => {
+      if (node?.type === "element" && node?.tagName === "pre") {
+        node.tagName = "Pre";
+      }
+    });
+    tree.children.push(preComponentImport);
+  };
+}
+
+const preComponentImport = {
+  type: "mdxjsEsm",
+  data: {
+    estree: {
+      type: "Program",
+      body: [
+        {
+          type: "ImportDeclaration",
+          specifiers: [
+            {
+              type: "ImportDefaultSpecifier",
+              local: {
+                type: "Identifier",
+                name: "Pre",
+              },
+            },
+          ],
+          source: {
+            type: "Literal",
+            value: "~/components/pre",
+            raw: '"~/components/pre"',
+          },
+        },
+      ],
+      sourceType: "module",
+    },
+  },
+};
+
+export default enhancedRehypHighlight;
+```
+
+这里的preComponentImport是为了在MDX中引入自定义的Pre组件，代码如下：
+
+```tsx
+import { useCallback, type PropsWithChildren } from "react";
+import { Button } from "./ui/button";
+
+type PreProps = PropsWithChildren<{ code: string; language?: string }>;
+
+export default function Pre({
+  children,
+  code,
+  language = "",
+  ...other
+}: PreProps) {
+  const copyHandler = useCallback(() => {
+    navigator.clipboard.writeText(code);
+  }, [code]);
+  return (
+    <pre {...other}>
+      <div className="border-b h-8 flex bg-muted items-center justify-between">
+        <span className="text-muted-foreground text-sm pl-4">{language}</span>
+        <Button
+          variant="link"
+          className="text-muted-foreground text-sm hover:hover:no-underline p-0 pr-4 h-fit"
+          onClick={copyHandler}
+        >
+          copy
+        </Button>
+      </div>
+      {children}
+    </pre>
+  );
+}
+
+```
+
+剩下的就是把enhancedRehypHighlight放到remix.config.js中即可。
+
+```diff
++ import enhancedRehypHighlight from "./tools/rehype-highlight";
+...
+export const config: UserConfig = {
+  ...
+  rehypePlugins: [
+    ...
++   enhancedRehypHighlight,
+    ...
+  ],
+  ...
+};
+
+```
